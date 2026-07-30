@@ -43,6 +43,7 @@ You will also see any lint errors in the console.
 
 > Note: If you are installing behind a corporate proxy (npm-proxy) you will need
 > to **run the following** script before committing changes
+
 - `bun run scripts/clean-bun-lock.ts` - remove internal proxy urls from the bun lock. This will allow the github workflows to fetch packages from external npm.
 
 Always invoke these through `bun run`. `build` and `test` are Bun's own subcommands, so `bun build` and `bun test`
@@ -54,7 +55,26 @@ OSS Unity Catalog supports Sign in with Google. You can authenticate with Google
 
 NOTE: The google client ID should match what is configured in the server.properties file on the server side. See README in root directory. In order for login to work, authentication must be enabled on server side AND UI side and users must be added to users table.
 
-Once you have the client ID, add it to the `.env` file after `REACT_APP_GOOGLE_CLIENT_ID=` and change the `REACT_APP_GOOGLE_AUTH_ENABLED` flag from false to true. Restart the dev server. 
+Once you have the client ID, add it to the `.env` file after `REACT_APP_GOOGLE_CLIENT_ID=` and change the `REACT_APP_GOOGLE_AUTH_ENABLED` flag from false to true. Restart the dev server.
+
+## Building the Docker image
+
+You can build the UI image locally using the following command:
+
+```bash
+docker build \
+-t unitycatalog/unitycatalog-ui:local \
+.
+```
+
+and if you are behind a corporate firewall for NPM, you can pass in the proxy location using the `NPM_REGISTRY` build arg.
+
+```bash
+docker build \
+--build-arg NPM_REGISTRY=https://npm-proxy.example.com/ \
+-t unitycatalog/unitycatalog-ui:local \
+.
+```
 
 ## References
 

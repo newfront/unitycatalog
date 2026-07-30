@@ -3,6 +3,8 @@ FROM oven/bun:1.3.14-slim@sha256:d56a2534ffd262e92c12fd3249d3924d296d97086da773f
 FROM node:18@sha256:c6ae79e38498325db67193d391e6ec1d224d96c693a8a4d943498556716d3783
 
 ARG PROXY_HOST=server
+# Optional corporate npm mirror, e.g. --build-arg NPM_REGISTRY=https://npm-proxy.example.com/
+ARG NPM_REGISTRY=
 WORKDIR /ui
 
 # Bun is the package manager and script runner; react-scripts itself still runs on Node.
@@ -14,7 +16,12 @@ RUN <<EOF
 set -ex
 apt-get update
 apt-get install -y jq
+if [ -n "$NPM_REGISTRY" ]; then
+  printf 'registry=%s\n' "$NPM_REGISTRY" > .npmrc
+fi
 bun install --frozen-lockfile
+# The mirror is a build-time concern only; keep it out of the published image.
+rm -f .npmrc
 # TODO: configure this directly from the ui app
 # Work around to set the proxy host; required for running locally with docker-compose
 jq --arg proxy "http://$PROXY_HOST:8080" '.proxy = $proxy' package.json > temp.json
