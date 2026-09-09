@@ -200,14 +200,62 @@ class UCSingleCatalog
 
   override def listTables(namespace: Array[String]): Array[Identifier] = delegate.listTables(namespace)
 
-  override def loadTable(ident: Identifier): Table = delegate.loadTable(ident)
+  override def loadTable(ident: Identifier): Table = {
+    requireAddressableTableNameOrPathTable(ident)
+    delegate.loadTable(ident)
+  }
 
-  override def loadTable(ident: Identifier, version:  String): Table = delegate.loadTable(ident, version)
+  override def loadTable(ident: Identifier, version: String): Table = {
+    requireAddressableTableNameOrPathTable(ident)
+    delegate.loadTable(ident, version)
+  }
 
-  override def loadTable(ident: Identifier, timestamp:  Long): Table = delegate.loadTable(ident, timestamp)
+  override def loadTable(ident: Identifier, timestamp: Long): Table = {
+    requireAddressableTableNameOrPathTable(ident)
+    delegate.loadTable(ident, timestamp)
+  }
 
+  /**
+   * Prevents file-format path identifiers (for example, `parquet`.`s3://bucket/path`) from reaching
+   * catalog delegates that interpret them as Unity Catalog table names. Reporting these identifiers
+   * as missing lets Spark's SQL-on-file resolution handle them instead.
+   *
+   * Delta and Iceberg path identifiers remain delegated so DeltaCatalog can resolve
+   * `delta.`path`` via `loadPathTable` and `iceberg.`path`` via `newIcebergPathTable`.
+   * Nested namespaces fail with [[UCSingleCatalog.checkUnsupportedNestedNamespace]] on load so
+   * they are not mistaken for a missing table.
+   */
+  private def requireAddressableTableNameOrPathTable(ident: Identifier): Unit = {
+    if (isDeltaOrIcebergPath(ident)) {
+      return
+    }
+    UCSingleCatalog.checkUnsupportedNestedNamespace(ident.namespace())
+    if (!UCSingleCatalog.isAddressableTableName(ident)) {
+      throw new NoSuchTableException(ident)
+    }
+  }
+
+  /**
+   * Parquet-style path identifiers are absent (so Spark can fall through to SQL-on-file). Nested
+   * names still go to the delegate: Delta 4.3+ rejects them client-side with
+   * IllegalArgumentException, which Spark DROP/EXISTS tests expect. Do not throw
+   * [[UCSingleCatalog.checkUnsupportedNestedNamespace]] here.
+   */
   override def tableExists(ident: Identifier): Boolean = {
-    delegate.tableExists(ident)
+    if (isDeltaOrIcebergPath(ident) || ident.namespace().length != 1) {
+      delegate.tableExists(ident)
+    } else if (!UCSingleCatalog.isAddressableTableName(ident)) {
+      false
+    } else {
+      delegate.tableExists(ident)
+    }
+  }
+
+  /** Matches DeltaCatalog's `hasDeltaNamespace` / `hasIcebergNamespace` path-table probe. */
+  private def isDeltaOrIcebergPath(ident: Identifier): Boolean = {
+    ident.namespace().length == 1 && (
+      ident.namespace()(0).equalsIgnoreCase("delta") ||
+        ident.namespace()(0).equalsIgnoreCase("iceberg"))
   }
 
   override def capabilities(): util.Set[TableCatalogCapability] = delegate.capabilities()
@@ -1074,14 +1122,10 @@ private[spark] class UCProxy(
     comment.foreach(createTable.setComment(_))
     createTable.setColumns(columns)
     createTable.setDataSourceFormat(convertDatasourceFormat(format))
-    // Do not send the V2 table properties as they are made part of the `createTable` already.
-    // Also strip the vended filesystem credential properties (fs.* and their option.-prefixed
-    // duplicates, e.g. fs.s3a.session.token): they are session-scoped Hadoop configs injected by
-    // UCSingleCatalog for the local write path, not table metadata, and must never be persisted
-    // in the catalog.
+    // Drop V2 reserved keys, vended fs.* credentials, and Spark Hive-metastore schema JSON.
+    // Same deny-list as createView; see UCTableProperties.shouldPersistProperty.
     val propertiesToServer = properties.view
-      .filterKeys(!UCTableProperties.V2_TABLE_PROPERTIES.contains(_))
-      .filterKeys(k => !k.startsWith("fs.") && !k.startsWith(TableCatalog.OPTION_PREFIX + "fs."))
+      .filterKeys(UCTableProperties.shouldPersistProperty(_))
       .toMap
     createTable.setProperties(propertiesToServer)
     try {
