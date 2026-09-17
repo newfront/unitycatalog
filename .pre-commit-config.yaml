@@ -33,3 +33,11 @@ repos:
         entry: bash -c 'cd ui && bun run clean-bun-lock'
         files: ^ui/bun\.lock$
         pass_filenames: false
+  - repo: local
+    hooks:
+      - id: clean-bun-lock-ui-new
+        name: Strip proxy URLs from ui-new/web/bun.lock
+        language: system
+        entry: bash -c 'cd ui-new/web && bun run clean-bun-lock'
+        files: ^ui-new/web/bun\.lock$
+        pass_filenames: false
