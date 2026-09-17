@@ -7,8 +7,7 @@ ARG NPM_REGISTRY_URL
 WORKDIR /app
 
 COPY package.json bun.lock ./
-RUN --mount=type=secret,id=npm_config,target=/root/.npmrc,required=false \
-    if [ -n "$NPM_REGISTRY_URL" ] && [ ! -f /root/.npmrc ]; then \
+RUN if [ -n "$NPM_REGISTRY_URL" ]; then \
         bun install --frozen-lockfile --registry "$NPM_REGISTRY_URL"; \
     else \
         bun install --frozen-lockfile; \
