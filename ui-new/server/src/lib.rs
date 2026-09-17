@@ -35,8 +35,7 @@ pub struct AppState {
     pub config: Arc<Config>,
 }
 
-/// Runtime config the SPA reads at GET /config. The runtime equivalent of the
-/// current ui's build-time REACT_APP_*_AUTH_ENABLED flags.
+/// Runtime settings the SPA reads at GET /config.
 async fn config_handler(
     axum::extract::State(state): axum::extract::State<AppState>,
 ) -> Json<serde_json::Value> {
@@ -45,6 +44,9 @@ async fn config_handler(
         "googleClientId": state.config.google_client_id,
         "oktaEnabled": state.config.okta_enabled,
         "keycloakEnabled": state.config.keycloak_enabled,
+        "features": {
+            "rpcRequestValidation": state.config.rpc_validation_enabled,
+        },
     }))
 }
 

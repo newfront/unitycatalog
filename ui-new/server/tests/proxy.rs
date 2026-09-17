@@ -16,6 +16,7 @@ fn test_config(uc_server: String) -> Config {
         google_client_id: "gid".to_string(),
         okta_enabled: false,
         keycloak_enabled: true,
+        rpc_validation_enabled: true,
         allowed_origins: vec![],
     }
 }
@@ -171,7 +172,7 @@ async fn call_rejects_typed_domain_bypass() {
 }
 
 #[tokio::test]
-async fn config_reports_auth_flags() {
+async fn config_reports_app_settings() {
     let app = build_app("http://127.0.0.1:1".to_string());
     let resp = app
         .oneshot(
@@ -188,6 +189,7 @@ async fn config_reports_auth_flags() {
     assert_eq!(json["googleClientId"], "gid");
     assert_eq!(json["keycloakEnabled"], true);
     assert_eq!(json["oktaEnabled"], false);
+    assert_eq!(json["features"]["rpcRequestValidation"], true);
 }
 
 #[tokio::test]

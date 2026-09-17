@@ -17,9 +17,16 @@ supports the existing cookie-based auth (or an auth-disabled mode).
 
 ## Architecture
 
-```
-Browser SPA  --Connect (same-origin)-->  Rust bridge  --REST-->  UC Java server
-             <--Set-Cookie propagated--               <--------
+```mermaid
+flowchart LR
+    browser["Browser<br/>React SPA"]
+    web["Web server<br/>Vite development / Nginx production"]
+    bridge["Rust bridge<br/>axum + Connect RPC"]
+    uc["Unity Catalog<br/>Java REST server"]
+
+    browser <-->|"SPA assets, Connect RPCs, and Set-Cookie"| web
+    web <-->|"Proxy /uc.v1.*, /config, and /healthz"| bridge
+    bridge <-->|"Unity Catalog REST API<br/>Cookie and Authorization forwarding"| uc
 ```
 
 The bridge being same-origin removes CORS. Auth stays cookie-based (the current
@@ -147,6 +154,7 @@ build also forwards `MAVEN_PROXY_URL` to the repository Dockerfile.
 | `GOOGLE_CLIENT_ID` | _(empty)_ | Enables the Google sign-in button |
 | `OKTA_AUTH_ENABLED` | `false` | Advertise Okta as enabled |
 | `KEYCLOAK_AUTH_ENABLED` | `false` | Advertise Keycloak as enabled |
+| `UI_RPC_VALIDATION_ENABLED` | `false` | Validate SPA RPC requests before sending them to the bridge |
 | `ALLOWED_ORIGINS` | _(empty)_ | Extra CORS origins (comma-separated); empty = same-origin only |
 
 ## Test
