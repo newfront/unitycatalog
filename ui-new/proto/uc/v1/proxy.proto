@@ -10,12 +10,6 @@ message KeyValue {
 // Generic passthrough for the control-plane auth, SCIM, and read-only
 // permissions endpoints that do not yet have typed UI services.
 message CallRequest {
-  // Deprecated. The bridge only uses its configured UC_SERVER and rejects
-  // non-empty values.
-  string server_url = 1 [deprecated = true];
-  // Optional bearer token. When empty, cookie-based auth is used (forwarded by
-  // the bridge from the browser's request).
-  string token = 2;
   // HTTP method: GET | POST | PATCH | PUT | DELETE.
   string method = 3;
   // Allowlisted request path, e.g. /api/1.0/unity-control/scim2/Me.

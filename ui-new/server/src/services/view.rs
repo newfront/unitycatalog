@@ -3,57 +3,36 @@ use std::collections::{HashMap, HashSet};
 use connectrpc::{ConnectError, RequestContext, Response, ServiceRequest, ServiceResult};
 use serde_json::{json, Map, Value};
 
-use super::{column_value, continue_page, dependencies_value, page_query, properties_value};
+use super::{
+    column_value, dependencies_value, object_full_name, page_query, properties_value, UiRpc,
+};
 use crate::mapping;
 use crate::proto::uc::v1::*;
-use crate::upstream::{path_segment, Upstream};
-use crate::AppState;
-
-pub(crate) struct ViewRpc {
-    upstream: Upstream,
-}
-
-impl ViewRpc {
-    pub(crate) fn new(state: AppState) -> Self {
-        Self {
-            upstream: Upstream::new(state),
-        }
-    }
-}
+use crate::upstream::path_segment;
 
 #[protovalidate_buffa::connect_impl]
-impl ViewService for ViewRpc {
+impl ViewService for UiRpc {
     async fn list_views(
         &self,
         ctx: RequestContext,
         request: ServiceRequest<'_, ListViewsRequest>,
     ) -> ServiceResult<ListViewsResponse> {
-        let request = request.to_owned_message();
         let mut query = page_query(&request.page);
         query.extend([
-            ("catalog_name", request.schema.catalog_name.clone()),
-            ("schema_name", request.schema.name.clone()),
+            ("catalog_name", request.schema.catalog_name.to_string()),
+            ("schema_name", request.schema.name.to_string()),
             ("omit_columns", "true".to_string()),
             ("omit_properties", "true".to_string()),
         ]);
-        let (views, page) = loop {
-            let value = self.upstream.get(&ctx, "/tables", query.clone()).await?;
-            let views: Vec<_> = mapping::required_array(&value, "tables")?
-                .iter()
-                .filter(|table| {
-                    table.get("table_type").and_then(Value::as_str) == Some("METRIC_VIEW")
-                })
-                .map(mapping::metric_view_summary)
-                .collect();
-            let page = mapping::page(&value);
-            if !views.is_empty() || page.next_page_token.is_empty() {
-                break (views, page);
-            }
-            continue_page(&mut query, &page.next_page_token)?;
-        };
+        let value = self.upstream.get(&ctx, "/tables", query).await?;
+        let views = mapping::required_array(&value, "tables")?
+            .iter()
+            .filter(|table| table.get("table_type").and_then(Value::as_str) == Some("METRIC_VIEW"))
+            .map(mapping::metric_view_summary)
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Response::new(ListViewsResponse {
             views,
-            page: page.into(),
+            page: mapping::page(&value).into(),
             ..Default::default()
         }))
     }
@@ -63,8 +42,7 @@ impl ViewService for ViewRpc {
         ctx: RequestContext,
         request: ServiceRequest<'_, GetViewRequest>,
     ) -> ServiceResult<GetViewResponse> {
-        let request = request.to_owned_message();
-        let name = full_name(&request.view);
+        let name = object_full_name(&request.view);
         let value = self
             .upstream
             .get(
@@ -79,7 +57,7 @@ impl ViewService for ViewRpc {
             )));
         }
         Ok(Response::new(GetViewResponse {
-            view: mapping::metric_view_info(&value).into(),
+            view: mapping::metric_view_info(&value)?.into(),
             ..Default::default()
         }))
     }
@@ -89,18 +67,17 @@ impl ViewService for ViewRpc {
         ctx: RequestContext,
         request: ServiceRequest<'_, CreateViewRequest>,
     ) -> ServiceResult<CreateViewResponse> {
-        let request = request.to_owned_message();
-        let fields = metric_fields(&request.view_definition)?;
+        let fields = metric_fields(request.view_definition)?;
         let mut names = HashSet::new();
         let mut columns = Vec::with_capacity(request.columns.len());
         for (position, column) in request.columns.iter().enumerate() {
-            if !names.insert(column.name.as_str()) {
+            if !names.insert(column.name) {
                 return Err(ConnectError::invalid_argument(format!(
                     "Metric view column names must be unique: {}",
                     column.name
                 )));
             }
-            let (kind, expression) = fields.get(&column.name).ok_or_else(|| {
+            let (kind, expression) = fields.get(column.name).ok_or_else(|| {
                 ConnectError::invalid_argument(format!(
                     "Column {} is not declared in the metric view definition",
                     column.name
@@ -140,7 +117,7 @@ impl ViewService for ViewRpc {
         }
         let value = self.upstream.post(&ctx, "/tables", body).await?;
         Ok(Response::new(CreateViewResponse {
-            view: mapping::metric_view_info(&value).into(),
+            view: mapping::metric_view_info(&value)?.into(),
             ..Default::default()
         }))
     }
@@ -150,21 +127,7 @@ impl ViewService for ViewRpc {
         ctx: RequestContext,
         request: ServiceRequest<'_, DeleteViewRequest>,
     ) -> ServiceResult<DeleteViewResponse> {
-        let request = request.to_owned_message();
-        let name = full_name(&request.view);
-        let value = self
-            .upstream
-            .get(
-                &ctx,
-                &format!("/tables/{}", path_segment(&name)),
-                Vec::new(),
-            )
-            .await?;
-        if value.get("table_type").and_then(Value::as_str) != Some("METRIC_VIEW") {
-            return Err(ConnectError::not_found(format!(
-                "Metric view not found: {name}"
-            )));
-        }
+        let name = object_full_name(&request.view);
         self.upstream
             .delete(
                 &ctx,
@@ -222,11 +185,4 @@ fn collect_metric_fields(
         }
     }
     Ok(())
-}
-
-fn full_name(reference: &SchemaObjectRef) -> String {
-    format!(
-        "{}.{}.{}",
-        reference.catalog_name, reference.schema_name, reference.name
-    )
 }
