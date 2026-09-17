@@ -43,6 +43,6 @@ services:
 
 secrets:
   cargo_config:
-    file: "${CARGO_CONFIG_FILE:-${HOME}/.cargo/config.toml}"
+    file: "${CARGO_CONFIG_FILE:-./docker/empty-registry-config}"
   npm_config:
-    file: "${NPM_CONFIG_FILE:-${HOME}/.npmrc}"
+    file: "${NPM_CONFIG_FILE:-./docker/empty-registry-config}"
