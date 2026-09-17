@@ -130,13 +130,12 @@ docker compose -f docker-compose-remote.yaml up --build
 the published local ports. Local state is kept in named volumes; remove it with
 `docker compose down --volumes`.
 
-Set `CARGO_CONFIG_FILE` or `NPM_CONFIG_FILE` to pass private registry settings
-into their build stages as BuildKit secrets without storing them in the images.
-When unset, Compose uses a checked-in inert placeholder and the package managers
-use their public registries. `CARGO_REGISTRY_URL` remains an explicit override
-and `NPM_REGISTRY_URL` an explicit fallback; sparse Cargo registry URLs must end
-in `/`. The local Java build also forwards `MAVEN_PROXY_URL` to the repository
-Dockerfile.
+Set `CARGO_CONFIG_FILE` to pass private Cargo registry settings into the bridge
+build stage as a BuildKit secret. When unset, Compose uses a checked-in inert
+placeholder and Cargo uses its public registry. `CARGO_REGISTRY_URL` remains an
+explicit Cargo override, and `NPM_REGISTRY_URL` is the environment-only npm
+registry override; sparse Cargo registry URLs must end in `/`. The local Java
+build also forwards `MAVEN_PROXY_URL` to the repository Dockerfile.
 
 ## Bridge configuration (env)
 
