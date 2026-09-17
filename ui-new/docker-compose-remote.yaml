@@ -15,6 +15,7 @@ services:
       GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
       OKTA_AUTH_ENABLED: "${OKTA_AUTH_ENABLED:-false}"
       KEYCLOAK_AUTH_ENABLED: "${KEYCLOAK_AUTH_ENABLED:-false}"
+      UI_RPC_VALIDATION_ENABLED: "${UI_RPC_VALIDATION_ENABLED:-false}"
       RUST_LOG: "${RUST_LOG:-info}"
     expose:
       - "8081"

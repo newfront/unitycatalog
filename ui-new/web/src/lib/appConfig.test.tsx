@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { waitFor } from "@testing-library/react";
-import { useAppConfig } from "@/lib/appConfig";
+import { isRpcRequestValidationEnabled, useAppConfig } from "@/lib/appConfig";
 import { renderHookWithProviders } from "@/test/providers";
 
 afterEach(() => {
@@ -13,7 +13,11 @@ describe("useAppConfig", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ authEnabled: true, googleClientId: "gid" }),
+        json: async () => ({
+          authEnabled: true,
+          googleClientId: "gid",
+          features: { rpcRequestValidation: true },
+        }),
       }),
     );
     const { result } = renderHookWithProviders(() => useAppConfig());
@@ -23,7 +27,9 @@ describe("useAppConfig", () => {
       googleClientId: "gid",
       oktaEnabled: false,
       keycloakEnabled: false,
+      features: { rpcRequestValidation: true },
     });
+    expect(isRpcRequestValidationEnabled()).toBe(true);
   });
 
   it("returns auth-disabled defaults when /config is not ok", async () => {
@@ -31,6 +37,8 @@ describe("useAppConfig", () => {
     const { result } = renderHookWithProviders(() => useAppConfig());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.authEnabled).toBe(false);
+    expect(result.current.data?.features.rpcRequestValidation).toBe(false);
+    expect(isRpcRequestValidationEnabled()).toBe(false);
   });
 
   it("returns defaults when fetch throws", async () => {
@@ -38,5 +46,7 @@ describe("useAppConfig", () => {
     const { result } = renderHookWithProviders(() => useAppConfig());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.authEnabled).toBe(false);
+    expect(result.current.data?.features.rpcRequestValidation).toBe(false);
+    expect(isRpcRequestValidationEnabled()).toBe(false);
   });
 });

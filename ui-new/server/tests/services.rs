@@ -20,6 +20,7 @@ fn build_app(uc_server: String) -> axum::Router {
             google_client_id: String::new(),
             okta_enabled: false,
             keycloak_enabled: false,
+            rpc_validation_enabled: false,
             allowed_origins: vec![],
         }),
     })
