@@ -13,7 +13,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 vi.mock("@/lib/transport", () => ({ proxyClient: { call: vi.fn() } }));
 
 import { proxyClient } from "@/lib/transport";
-import { Providers } from "@/test/providers";
+import { makeQueryClient, Providers } from "@/test/providers";
 import { AuthProvider, useAuth } from "@/context/auth-context";
 import { getToken } from "@/lib/session";
 
@@ -109,9 +109,9 @@ describe("AuthProvider", () => {
 
   it("signInWithAccessToken stores the token and authenticates via bearer", async () => {
     stubConfig({ authEnabled: true });
-    // A user is only returned when a bearer token is forwarded.
-    call.mockImplementation(async (input: { token: string }) =>
-      input.token
+    // The transport reads the session token independently of the RPC body.
+    call.mockImplementation(async () =>
+      getToken()
         ? {
             httpStatus: 200,
             ok: true,
@@ -164,6 +164,36 @@ describe("AuthProvider", () => {
       await result.current.logout();
     });
     expect(getToken()).toBe("");
+  });
+
+  it("clears cached catalog data when the identity changes", async () => {
+    stubConfig({ authEnabled: true });
+    call.mockImplementation(async () =>
+      getToken()
+        ? {
+            httpStatus: 200,
+            ok: true,
+            body: JSON.stringify({ displayName: "Ada" }),
+          }
+        : { httpStatus: 401, ok: false, body: "" },
+    );
+    const client = makeQueryClient();
+    client.setQueryData(["private-catalog-data"], { name: "secret" });
+    const identityWrapper = ({ children }: { children: ReactNode }) => (
+      <Providers client={client}>
+        <AuthProvider>{children}</AuthProvider>
+      </Providers>
+    );
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: identityWrapper,
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.signInWithAccessToken("jwt-xyz");
+    });
+
+    expect(client.getQueryData(["private-catalog-data"])).toBeUndefined();
   });
 
   it("useAuth throws outside a provider", () => {

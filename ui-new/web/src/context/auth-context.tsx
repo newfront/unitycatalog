@@ -60,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithToken = useCallback(
     async (idToken: string) => {
       await loginMutation.mutateAsync(idToken);
+      queryClient.clear();
       setAuthenticating(true);
       try {
         const user = await queryClient.fetchQuery({
@@ -82,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithAccessToken = useCallback(
     async (accessToken: string) => {
       setToken(accessToken);
+      queryClient.clear();
       try {
         const user = await queryClient.fetchQuery({
           queryKey: CURRENT_USER_QUERY_KEY,
@@ -92,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         clearToken();
-        queryClient.removeQueries({ queryKey: CURRENT_USER_QUERY_KEY });
+        queryClient.clear();
         throw error;
       }
     },
@@ -101,10 +103,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     clearToken();
+    queryClient.clear();
     try {
       await logoutMutation.mutateAsync();
     } finally {
-      queryClient.invalidateQueries();
+      queryClient.clear();
     }
   }, [logoutMutation, queryClient]);
 
