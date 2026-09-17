@@ -26,8 +26,6 @@ services:
       dockerfile: Dockerfile
       args:
         NPM_REGISTRY_URL: "${NPM_REGISTRY_URL:-}"
-      secrets:
-        - npm_config
     depends_on:
       bridge:
         condition: service_healthy
@@ -44,5 +42,3 @@ services:
 secrets:
   cargo_config:
     file: "${CARGO_CONFIG_FILE:-./docker/empty-registry-config}"
-  npm_config:
-    file: "${NPM_CONFIG_FILE:-./docker/empty-registry-config}"
