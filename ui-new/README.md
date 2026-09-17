@@ -11,7 +11,7 @@ supports the existing cookie-based auth (or an auth-disabled mode).
 - `server/` — the bridge: a Rust [axum](https://docs.rs/axum) service exposing
   typed Connect services for each catalog domain, the allowlisted
   `UnityProxyService/Call` used by control-plane and permissions calls,
-  `/config`, and `/healthz`. Vite or a separate web server serves the SPA.
+  `/config`, and `/healthz`. Vite or Nginx serves the SPA.
 - `proto/` — the typed domain services plus the generic control/permissions proxy;
   `buf.gen.yaml` generates the TypeScript clients.
 
@@ -34,7 +34,7 @@ and which providers to show — the runtime replacement for the old build-time
 
 The protobuf package defines typed services for catalogs, schemas, tables,
 volumes, functions, registered models and model versions, and metric views.
-The contract and implementation are tracked by
+The implementation is split across the two-PR stack tracked by
 [issue #1888](https://github.com/unitycatalog/unitycatalog/issues/1888) and
 [issue #1889](https://github.com/unitycatalog/unitycatalog/issues/1889):
 
@@ -98,7 +98,44 @@ UC_SERVER=http://localhost:8080 ./target/release/uc-ui-bridge
 ```
 
 Serve `web/dist` from a web server that proxies `/uc.v1.*`, `/config`, and
-`/healthz` to the bridge.
+`/healthz` to the bridge. The container setup below supplies that Nginx layer.
+
+## Containers
+
+The default Compose file builds this checkout's Java server and starts the full
+local stack: PostgreSQL metadata, RustFS object storage, the Rust bridge, and
+the Nginx-hosted SPA. Local authorization is disabled by default. The
+repository's `etc/conf` remains the configuration source; `rustfs-init` copies
+it into a runtime volume and appends local S3 and PostgreSQL overrides.
+
+```bash
+cd ui-new
+docker compose up --build
+```
+
+Open the UI at http://localhost:3000, Unity Catalog at
+http://localhost:8080, and the RustFS console at http://localhost:9001
+(`rustfsadmin` / `rustfsadmin` by default).
+
+Use the remote Compose file to omit Unity Catalog, PostgreSQL, and RustFS and
+point the bridge at an existing Unity Catalog deployment (caveat: the deployment must be OSS Unity Catalog):
+
+```bash
+export UC_SERVER=https://uc.YOUR_DOMAIN.dev # replace with your UC URL
+export UI_AUTH_ENABLED=true
+docker compose -f docker-compose-remote.yaml up --build
+```
+
+`UI_PORT`, `UC_PORT`, `POSTGRES_PORT`, and the `RUSTFS_*_PORT` variables change
+the published local ports. Local state is kept in named volumes; remove it with
+`docker compose down --volumes`.
+
+Compose passes `~/.cargo/config.toml` and `~/.npmrc` into their build stages as
+BuildKit secrets, so private registry settings are used without being stored in
+the images. Override those paths with `CARGO_CONFIG_FILE` or `NPM_CONFIG_FILE`.
+`CARGO_REGISTRY_URL` remains an explicit override and `NPM_REGISTRY_URL` an
+explicit fallback; sparse Cargo registry URLs must end in `/`. The local Java
+build also forwards `MAVEN_PROXY_URL` to the repository Dockerfile.
 
 ## Bridge configuration (env)
 
