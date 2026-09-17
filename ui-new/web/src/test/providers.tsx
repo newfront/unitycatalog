@@ -16,6 +16,7 @@ import { FunctionService } from "@/gen/uc/v1/function_pb";
 import { ModelService } from "@/gen/uc/v1/model_pb";
 import { ViewService } from "@/gen/uc/v1/view_pb";
 import { ThemeProvider } from "@/lib/theme";
+import { createRequestValidationInterceptor } from "@/lib/validation";
 
 export type UcReply = { httpStatus?: number; body?: string; ok?: boolean };
 export type UcHandler = (call: {
@@ -69,11 +70,24 @@ const mutationDefaults = {
   views: { createView: succeed, deleteView: succeed },
 } satisfies RpcHandlers;
 
+const createValidatedRouterTransport = (
+  routes: Parameters<typeof createRouterTransport>[0],
+  validationEnabled: boolean,
+) =>
+  createRouterTransport(routes, {
+    transport: {
+      interceptors: [
+        createRequestValidationInterceptor(() => validationEnabled),
+      ],
+    },
+  });
+
 export function makeTransport(
   handler: UcHandler = okAll,
   rpc: RpcHandlers = {},
+  validationEnabled = true,
 ): Transport {
-  return createRouterTransport(({ service }) => {
+  return createValidatedRouterTransport(({ service }) => {
     service(UnityProxyService, {
       call(request) {
         const reply = handler({
@@ -100,7 +114,7 @@ export function makeTransport(
     });
     service(ModelService, { ...mutationDefaults.models, ...rpc.models });
     service(ViewService, { ...mutationDefaults.views, ...rpc.views });
-  });
+  }, validationEnabled);
 }
 
 export function makeQueryClient(): QueryClient {
