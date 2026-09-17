@@ -109,9 +109,9 @@ describe("AuthProvider", () => {
 
   it("signInWithAccessToken stores the token and authenticates via bearer", async () => {
     stubConfig({ authEnabled: true });
-    // A user is only returned when a bearer token is forwarded.
-    call.mockImplementation(async (input: { token: string }) =>
-      input.token
+    // The transport reads the session token independently of the RPC body.
+    call.mockImplementation(async () =>
+      getToken()
         ? {
             httpStatus: 200,
             ok: true,

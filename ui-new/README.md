@@ -11,7 +11,7 @@ supports the existing cookie-based auth (or an auth-disabled mode).
 - `server/` — the bridge: a Rust [axum](https://docs.rs/axum) service exposing
   typed Connect services for each catalog domain, the allowlisted
   `UnityProxyService/Call` used by control-plane and permissions calls,
-  `/config`, `/healthz`, and (in prod) the built SPA.
+  `/config`, and `/healthz`. Vite or a separate web server serves the SPA.
 - `proto/` — the typed domain services plus the generic control/permissions proxy;
   `buf.gen.yaml` generates the TypeScript clients.
 
@@ -85,16 +85,16 @@ To exercise the login flow, start the bridge with auth enabled:
 UI_AUTH_ENABLED=true GOOGLE_CLIENT_ID=<client-id> UC_SERVER=http://localhost:8080 cargo run
 ```
 
-## Build (production, single origin)
+## Build artifacts
 
 ```bash
 cd ui-new/web && bun run build          # -> web/dist
 cd ../server && cargo build --release    # -> target/release/uc-ui-bridge
-WEB_DIST=../web/dist UC_SERVER=http://localhost:8080 ./target/release/uc-ui-bridge
+UC_SERVER=http://localhost:8080 ./target/release/uc-ui-bridge
 ```
 
-The bridge then serves the SPA and the RPCs from one origin on `PORT` (default
-8081), with an `index.html` fallback for client-side routes.
+Serve `web/dist` from a web server that proxies `/uc.v1.*`, `/config`, and
+`/healthz` to the bridge.
 
 ## Bridge configuration (env)
 
@@ -107,7 +107,6 @@ The bridge then serves the SPA and the RPCs from one origin on `PORT` (default
 | `OKTA_AUTH_ENABLED` | `false` | Advertise Okta as enabled |
 | `KEYCLOAK_AUTH_ENABLED` | `false` | Advertise Keycloak as enabled |
 | `ALLOWED_ORIGINS` | _(empty)_ | Extra CORS origins (comma-separated); empty = same-origin only |
-| `WEB_DIST` | `../web/dist` | Built SPA directory to serve |
 
 ## Test
 
