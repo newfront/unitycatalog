@@ -1,60 +1,48 @@
-import { FunctionSquare } from "lucide-react";
+import { ChartNoAxesCombined } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
-import { useDeleteFunction, useGetFunction } from "@/hooks/functions";
-import { formatTimestamp } from "@/lib/uc";
+import { useDeleteView, useGetView } from "@/hooks/views";
 import { ColumnTypeName } from "@/gen/uc/v1/common_pb";
+import { formatTimestamp } from "@/lib/uc";
 import EntityHeader from "@/components/EntityHeader";
 import { QueryState } from "@/components/QueryState";
 import DescriptionCard from "@/components/DescriptionCard";
 import MetaGrid from "@/components/MetaGrid";
 import PermissionsPanel from "@/components/PermissionsPanel";
+import PropertiesCard from "@/components/PropertiesCard";
 import OwnerDeleteAction from "@/components/OwnerDeleteAction";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
-export default function FunctionDetails({
+export default function MetricViewDetails({
   catalog,
   schema,
-  ucFunction,
+  view,
 }: {
   catalog: string;
   schema: string;
-  ucFunction: string;
+  view: string;
 }) {
   const navigate = useNavigate();
-  const fullName = `${catalog}.${schema}.${ucFunction}`;
-  const { data, isLoading, error } = useGetFunction(fullName);
-  const deleteFunction = useDeleteFunction();
-  const params = data?.inputParameters ?? [];
+  const fullName = `${catalog}.${schema}.${view}`;
+  const { data, isLoading, error } = useGetView(fullName);
+  const deleteView = useDeleteView();
 
   return (
     <div>
       <EntityHeader
-        name={ucFunction}
-        Icon={FunctionSquare}
+        name={view}
+        Icon={ChartNoAxesCombined}
         catalog={catalog}
         schema={schema}
-        badges={["FUNCTION"]}
+        badges={["METRIC VIEW"]}
         actions={
           <OwnerDeleteAction
-            entityName={ucFunction}
-            entityType="function"
+            entityName={view}
+            entityType="metric view"
             owner={data?.audit?.owner}
             onDelete={() =>
-              deleteFunction.mutateAsync({
-                function: {
-                  catalogName: catalog,
-                  schemaName: schema,
-                  name: ucFunction,
-                },
+              deleteView.mutateAsync({
+                view: { catalogName: catalog, schemaName: schema, name: view },
               })
             }
             onDeleted={() =>
@@ -80,75 +68,52 @@ export default function FunctionDetails({
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm">
-                    Input parameters ({params.length})
+                    Columns ({data?.columns.length ?? 0})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {params.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No parameters.
-                    </p>
+                  {(data?.columns ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No columns.</p>
                   ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-12">#</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Comment</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {params.map((p, i) => (
-                          <TableRow key={p.name}>
-                            <TableCell className="text-muted-foreground">
-                              {p.position ?? i}
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              {p.name}
-                            </TableCell>
-                            <TableCell className="font-mono text-xs">
-                              {p.typeText || ColumnTypeName[p.typeName] || "—"}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {p.comment || "—"}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    <ul className="space-y-2">
+                      {(data?.columns ?? []).map((column) => (
+                        <li
+                          key={column.name}
+                          className="flex justify-between rounded-md border p-2 text-sm"
+                        >
+                          <span className="font-medium">{column.name}</span>
+                          <span className="font-mono text-muted-foreground">
+                            {column.typeText || ColumnTypeName[column.typeName]}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </CardContent>
               </Card>
-              {data?.routineDefinition && (
+              {data?.viewDefinition && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-sm">
-                      Routine definition
+                      Metric view definition
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <pre className="overflow-auto rounded-md bg-muted p-3 font-mono text-xs">
-                      {data.routineDefinition}
+                      {data.viewDefinition}
                     </pre>
                   </CardContent>
                 </Card>
               )}
             </TabsContent>
 
-            <TabsContent value="details">
+            <TabsContent value="details" className="space-y-4">
               <Card>
                 <CardContent>
                   <MetaGrid
                     items={[
                       { label: "Name", value: data?.name },
                       { label: "Full name", value: data?.fullName || fullName },
-                      {
-                        label: "Return type",
-                        value:
-                          data?.fullDataType ||
-                          (data ? ColumnTypeName[data.dataType] : "—"),
-                      },
                       { label: "Owner", value: data?.audit?.owner || "—" },
                       {
                         label: "Created",
@@ -158,15 +123,16 @@ export default function FunctionDetails({
                         label: "Updated",
                         value: formatTimestamp(data?.audit?.updatedAt),
                       },
-                      { label: "Function ID", value: data?.id || "—" },
+                      { label: "Table ID", value: data?.id || "—" },
                     ]}
                   />
                 </CardContent>
               </Card>
+              <PropertiesCard properties={data?.properties?.values} />
             </TabsContent>
 
             <TabsContent value="permissions">
-              <PermissionsPanel securableType="function" fullName={fullName} />
+              <PermissionsPanel securableType="table" fullName={fullName} />
             </TabsContent>
           </Tabs>
         </QueryState>

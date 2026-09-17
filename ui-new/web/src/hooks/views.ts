@@ -6,20 +6,20 @@ import {
   useTransport,
 } from "@connectrpc/connect-query";
 import { useQuery as useTanstackQuery } from "@tanstack/react-query";
-import { FunctionService } from "@/gen/uc/v1/function_pb";
+import { ViewService } from "@/gen/uc/v1/view_pb";
 import { collectAllPages, useInvalidateMethod } from "@/hooks/query";
 
-export function useListFunctions(
+export function useListViews(
   catalogName: string,
   schemaName: string,
   enabled = true,
 ) {
   const transport = useTransport();
-  const client = createClient(FunctionService, transport);
+  const client = createClient(ViewService, transport);
   const input = { schema: { catalogName, name: schemaName } };
   return useTanstackQuery({
     queryKey: createConnectQueryKey({
-      schema: FunctionService.method.listFunctions,
+      schema: ViewService.method.listViews,
       input,
       transport,
       cardinality: "finite",
@@ -28,15 +28,15 @@ export function useListFunctions(
     queryFn: () =>
       collectAllPages(
         (pageToken) =>
-          client.listFunctions({
+          client.listViews({
             ...input,
             page: pageToken ? { pageToken } : undefined,
           }),
-        (response) => response.functions,
+        (response) => response.views,
         (response) => response.page?.nextPageToken ?? "",
-        (response, functions) => ({
+        (response, views) => ({
           ...response,
-          functions,
+          views,
           page: response.page
             ? { ...response.page, nextPageToken: "" }
             : undefined,
@@ -45,32 +45,28 @@ export function useListFunctions(
   });
 }
 
-export function useGetFunction(fullName: string) {
+export function useGetView(fullName: string) {
   const [catalogName = "", schemaName = "", name = ""] = fullName.split(".");
   return useQuery(
-    FunctionService.method.getFunction,
-    { function: { catalogName, schemaName, name } },
+    ViewService.method.getView,
+    { view: { catalogName, schemaName, name } },
     {
       enabled: !!catalogName && !!schemaName && !!name,
-      select: (response) => response.function,
+      select: (response) => response.view,
     },
   );
 }
 
-export function useCreateFunction() {
-  const invalidateList = useInvalidateMethod(
-    FunctionService.method.listFunctions,
-  );
-  return useMutation(FunctionService.method.createFunction, {
+export function useCreateView() {
+  const invalidateList = useInvalidateMethod(ViewService.method.listViews);
+  return useMutation(ViewService.method.createView, {
     onSuccess: invalidateList,
   });
 }
 
-export function useDeleteFunction() {
-  const invalidateList = useInvalidateMethod(
-    FunctionService.method.listFunctions,
-  );
-  return useMutation(FunctionService.method.deleteFunction, {
+export function useDeleteView() {
+  const invalidateList = useInvalidateMethod(ViewService.method.listViews);
+  return useMutation(ViewService.method.deleteView, {
     onSuccess: invalidateList,
   });
 }
