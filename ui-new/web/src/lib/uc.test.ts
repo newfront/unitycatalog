@@ -14,7 +14,6 @@ import {
   withListTablesQuery,
   LIST_TABLES_QUERY,
 } from "@/lib/uc";
-import { setToken } from "@/lib/session";
 
 const call = proxyClient.call as unknown as Mock;
 
@@ -23,8 +22,7 @@ beforeEach(() => {
 });
 
 describe("ucCall", () => {
-  it("forwards method, path, query, and the active bearer token", async () => {
-    setToken("jwt-1");
+  it("forwards method, path, and query without auth in the message", async () => {
     call.mockResolvedValue({ httpStatus: 200, body: "{}", ok: true });
 
     await ucCall("GET", "/api/2.1/unity-catalog/catalogs", {
@@ -35,7 +33,7 @@ describe("ucCall", () => {
     const arg = call.mock.calls[0][0];
     expect(arg.method).toBe("GET");
     expect(arg.path).toBe("/api/2.1/unity-catalog/catalogs");
-    expect(arg.token).toBe("jwt-1");
+    expect(arg).not.toHaveProperty("token");
     // Empty query values are dropped.
     expect(arg.query).toEqual([{ key: "catalog_name", value: "main" }]);
     expect(arg.jsonBody).toBe("");
