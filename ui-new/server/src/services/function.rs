@@ -1,42 +1,28 @@
 use connectrpc::{RequestContext, Response, ServiceRequest, ServiceResult};
 use serde_json::{json, Value};
 
-use super::{page_query, scalar_type};
+use super::{object_full_name, page_query, scalar_type, UiRpc};
 use crate::mapping;
 use crate::proto::uc::v1::*;
-use crate::upstream::{path_segment, Upstream};
-use crate::AppState;
-
-pub(crate) struct FunctionRpc {
-    upstream: Upstream,
-}
-
-impl FunctionRpc {
-    pub(crate) fn new(state: AppState) -> Self {
-        Self {
-            upstream: Upstream::new(state),
-        }
-    }
-}
+use crate::upstream::path_segment;
 
 #[protovalidate_buffa::connect_impl]
-impl FunctionService for FunctionRpc {
+impl FunctionService for UiRpc {
     async fn list_functions(
         &self,
         ctx: RequestContext,
         request: ServiceRequest<'_, ListFunctionsRequest>,
     ) -> ServiceResult<ListFunctionsResponse> {
-        let request = request.to_owned_message();
         let mut query = page_query(&request.page);
         query.extend([
-            ("catalog_name", request.schema.catalog_name.clone()),
-            ("schema_name", request.schema.name.clone()),
+            ("catalog_name", request.schema.catalog_name.to_string()),
+            ("schema_name", request.schema.name.to_string()),
         ]);
         let value = self.upstream.get(&ctx, "/functions", query).await?;
         let functions = mapping::required_array(&value, "functions")?
             .iter()
             .map(mapping::function_summary)
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Response::new(ListFunctionsResponse {
             functions,
             page: mapping::page(&value).into(),
@@ -49,17 +35,19 @@ impl FunctionService for FunctionRpc {
         ctx: RequestContext,
         request: ServiceRequest<'_, GetFunctionRequest>,
     ) -> ServiceResult<GetFunctionResponse> {
-        let request = request.to_owned_message();
         let value = self
             .upstream
             .get(
                 &ctx,
-                &format!("/functions/{}", path_segment(&full_name(&request.function))),
+                &format!(
+                    "/functions/{}",
+                    path_segment(&object_full_name(&request.function))
+                ),
                 Vec::new(),
             )
             .await?;
         Ok(Response::new(GetFunctionResponse {
-            function: mapping::function_info(&value).into(),
+            function: mapping::function_info(&value)?.into(),
             ..Default::default()
         }))
     }
@@ -69,7 +57,6 @@ impl FunctionService for FunctionRpc {
         ctx: RequestContext,
         request: ServiceRequest<'_, CreateFunctionRequest>,
     ) -> ServiceResult<CreateFunctionResponse> {
-        let request = request.to_owned_message();
         let parameters = request
             .parameters
             .iter()
@@ -113,7 +100,7 @@ impl FunctionService for FunctionRpc {
             .post(&ctx, "/functions", json!({ "function_info": body }))
             .await?;
         Ok(Response::new(CreateFunctionResponse {
-            function: mapping::function_info(&value).into(),
+            function: mapping::function_info(&value)?.into(),
             ..Default::default()
         }))
     }
@@ -123,21 +110,16 @@ impl FunctionService for FunctionRpc {
         ctx: RequestContext,
         request: ServiceRequest<'_, DeleteFunctionRequest>,
     ) -> ServiceResult<DeleteFunctionResponse> {
-        let request = request.to_owned_message();
         self.upstream
             .delete(
                 &ctx,
-                &format!("/functions/{}", path_segment(&full_name(&request.function))),
+                &format!(
+                    "/functions/{}",
+                    path_segment(&object_full_name(&request.function))
+                ),
                 Vec::new(),
             )
             .await?;
         Ok(Response::new(DeleteFunctionResponse::default()))
     }
-}
-
-fn full_name(reference: &SchemaObjectRef) -> String {
-    format!(
-        "{}.{}.{}",
-        reference.catalog_name, reference.schema_name, reference.name
-    )
 }
