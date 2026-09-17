@@ -1,5 +1,4 @@
 import { proxyClient } from "@/lib/transport";
-import { getToken } from "@/lib/session";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 
 // Native Unity Catalog REST surface prefixes. Mirrors the current ui's constants.
@@ -33,7 +32,7 @@ export type CallOpts = {
   contentType?: string;
 };
 
-function toKV(query?: Record<string, string | undefined>) {
+export function toKeyValues(query?: Record<string, string | undefined>) {
   const out: { key: string; value: string }[] = [];
   if (!query) return out;
   for (const [key, value] of Object.entries(query)) {
@@ -43,18 +42,16 @@ function toKV(query?: Record<string, string | undefined>) {
 }
 
 // ucCall returns the raw proxied response (status + body string). Authentication
-// is carried by the transport header, browser cookie, and legacy token field.
+// is carried by the transport Authorization header and browser cookie.
 export async function ucCall(
   method: string,
   path: string,
   opts: CallOpts = {},
 ): Promise<RawResult> {
   const res = await proxyClient.call({
-    serverUrl: "",
-    token: getToken(),
     method,
     path,
-    query: toKV(opts.query),
+    query: toKeyValues(opts.query),
     jsonBody:
       opts.body === undefined || opts.body === null || opts.body === ""
         ? ""

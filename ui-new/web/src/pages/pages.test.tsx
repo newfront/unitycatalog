@@ -4,7 +4,15 @@ import userEvent from "@testing-library/user-event";
 
 vi.mock("@tanstack/react-router", () => import("@/test/tanstack-router-mock"));
 
-import { renderWithProviders, type UcHandler } from "@/test/providers";
+import {
+  renderWithProviders,
+  type RpcHandlers,
+  type UcHandler,
+} from "@/test/providers";
+import { ColumnTypeName } from "@/gen/uc/v1/common_pb";
+import { DataSourceFormat, TableType } from "@/gen/uc/v1/table_pb";
+import { VolumeType } from "@/gen/uc/v1/volume_pb";
+import { ModelVersionStatus } from "@/gen/uc/v1/model_pb";
 import CatalogsList from "@/pages/CatalogsList";
 import CatalogDetails from "@/pages/CatalogDetails";
 import SchemaDetails from "@/pages/SchemaDetails";
@@ -15,97 +23,134 @@ import ModelDetails from "@/pages/ModelDetails";
 import ModelVersionDetails from "@/pages/ModelVersionDetails";
 import MetricViewDetails from "@/pages/MetricViewDetails";
 
-// A broad handler answering every read the detail pages make.
-const handler: UcHandler = ({ path }) => {
-  const body = (o: unknown) => ({
-    httpStatus: 200,
-    ok: true,
-    body: JSON.stringify(o),
-  });
-  switch (true) {
-    case path === "/api/2.1/unity-catalog/catalogs":
-      return body({
-        catalogs: [
-          { name: "main", comment: "root", updated_at: 1_700_000_000_000 },
-        ],
-      });
-    case path === "/api/2.1/unity-catalog/catalogs/main":
-      return body({
+const identity = { catalogName: "main", schemaName: "default" };
+const rpc: RpcHandlers = {
+  catalogs: {
+    listCatalogs: () => ({ catalogs: [{ name: "main", comment: "root" }] }),
+    getCatalog: () => ({
+      catalog: {
         name: "main",
         comment: "root",
-        owner: "me",
-        properties: { k: "v" },
-      });
-    case path === "/api/2.1/unity-catalog/schemas":
-      return body({ schemas: [{ name: "default" }] });
-    case path === "/api/2.1/unity-catalog/schemas/main.default":
-      return body({ name: "default", catalog_name: "main", comment: "sc" });
-    case path === "/api/2.1/unity-catalog/tables":
-      return body({
-        tables: [
-          { name: "events", table_type: "MANAGED" },
-          { name: "metrics", table_type: "METRIC_VIEW" },
-        ],
-      });
-    case path === "/api/2.1/unity-catalog/tables/main.default.events":
-      return body({
+        audit: { owner: "me" },
+        properties: { values: { k: "v" } },
+      },
+    }),
+  },
+  schemas: {
+    listSchemas: () => ({ schemas: [{ ...identity, name: "default" }] }),
+    getSchema: () => ({
+      schema: { ...identity, name: "default", comment: "sc" },
+    }),
+  },
+  tables: {
+    listTables: () => ({
+      tables: [{ ...identity, name: "events", tableType: TableType.MANAGED }],
+    }),
+    getTable: () => ({
+      table: {
+        ...identity,
         name: "events",
-        table_type: "MANAGED",
-        data_source_format: "DELTA",
+        tableType: TableType.MANAGED,
+        dataSourceFormat: DataSourceFormat.DELTA,
         comment: "clickstream",
         columns: [
-          { name: "id", type_text: "string", nullable: true, position: 0 },
+          {
+            name: "id",
+            typeText: "string",
+            typeName: ColumnTypeName.STRING,
+            nullable: true,
+            position: 0,
+          },
         ],
-      });
-    case path === "/api/2.1/unity-catalog/tables/main.default.metrics":
-      return body({
+      },
+    }),
+  },
+  views: {
+    listViews: () => ({ views: [{ ...identity, name: "metrics" }] }),
+    getView: () => ({
+      view: {
+        ...identity,
         name: "metrics",
-        table_type: "METRIC_VIEW",
-        view_definition: "version: 1.1\nsource: main.default.events",
-        columns: [{ name: "total", type_text: "bigint", nullable: true }],
-      });
-    case path === "/api/2.1/unity-catalog/volumes":
-      return body({ volumes: [{ name: "vol" }] });
-    case path === "/api/2.1/unity-catalog/volumes/main.default.vol":
-      return body({
-        name: "vol",
-        volume_type: "MANAGED",
-        storage_location: "s3://x",
-      });
-    case path === "/api/2.1/unity-catalog/functions":
-      return body({ functions: [{ name: "fn" }] });
-    case path === "/api/2.1/unity-catalog/functions/main.default.fn":
-      return body({
-        name: "fn",
-        input_params: {
-          parameters: [{ name: "x", type_text: "int", position: 0 }],
-        },
-      });
-    case path === "/api/2.1/unity-catalog/models":
-      return body({ registered_models: [{ name: "mdl" }] });
-    case path === "/api/2.1/unity-catalog/models/main.default.mdl":
-      return body({ name: "mdl", comment: "a model" });
-    case path === "/api/2.1/unity-catalog/models/main.default.mdl/versions":
-      return body({
-        model_versions: [
-          { version: 1, status: "READY", created_at: 1_700_000_000_000 },
+        viewDefinition: "version: 1.1\nsource: main.default.events",
+        columns: [
+          {
+            name: "total",
+            typeText: "bigint",
+            typeName: ColumnTypeName.LONG,
+            nullable: true,
+          },
         ],
-      });
-    case path === "/api/2.1/unity-catalog/models/main.default.mdl/versions/1":
-      return body({
-        model_name: "mdl",
-        version: 1,
-        status: "READY",
+      },
+    }),
+  },
+  volumes: {
+    listVolumes: () => ({ volumes: [{ ...identity, name: "vol" }] }),
+    getVolume: () => ({
+      volume: {
+        ...identity,
+        name: "vol",
+        volumeType: VolumeType.MANAGED,
+        storageLocation: "s3://x",
+      },
+    }),
+  },
+  functions: {
+    listFunctions: () => ({ functions: [{ ...identity, name: "fn" }] }),
+    getFunction: () => ({
+      function: {
+        ...identity,
+        name: "fn",
+        inputParameters: [
+          {
+            name: "x",
+            typeText: "int",
+            typeName: ColumnTypeName.INT,
+            position: 0,
+          },
+        ],
+      },
+    }),
+  },
+  models: {
+    listRegisteredModels: () => ({ models: [{ ...identity, name: "mdl" }] }),
+    getRegisteredModel: () => ({
+      model: { ...identity, name: "mdl", comment: "a model" },
+    }),
+    listModelVersions: () => ({
+      versions: [
+        {
+          ...identity,
+          modelName: "mdl",
+          version: 1n,
+          status: ModelVersionStatus.READY,
+        },
+      ],
+    }),
+    getModelVersion: () => ({
+      modelVersion: {
+        ...identity,
+        modelName: "mdl",
+        version: 1n,
+        status: ModelVersionStatus.READY,
         source: "s3://m",
-      });
-    case path.includes("/permissions/"):
-      return body({
-        privilege_assignments: [{ principal: "ada", privileges: ["SELECT"] }],
-      });
-    default:
-      return { httpStatus: 404, ok: false, body: "{}" };
-  }
+      },
+    }),
+  },
 };
+
+const handler: UcHandler = ({ path }) => ({
+  httpStatus: 200,
+  ok: true,
+  body: JSON.stringify(
+    path.includes("/permissions/")
+      ? {
+          privilege_assignments: [{ principal: "ada", privileges: ["SELECT"] }],
+        }
+      : {},
+  ),
+});
+
+const options = { handler, rpc };
 
 async function clickTabs() {
   // Tabs live inside QueryState, so wait for them to mount once data resolves.
@@ -117,7 +162,7 @@ async function clickTabs() {
 
 describe("CatalogsList", () => {
   it("lists catalogs", async () => {
-    renderWithProviders(<CatalogsList />, { handler });
+    renderWithProviders(<CatalogsList />, options);
     expect(await screen.findByText("main")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Catalogs" }),
@@ -126,11 +171,7 @@ describe("CatalogsList", () => {
 
   it("shows an empty state", async () => {
     renderWithProviders(<CatalogsList />, {
-      handler: () => ({
-        httpStatus: 200,
-        ok: true,
-        body: JSON.stringify({ catalogs: [] }),
-      }),
+      rpc: { catalogs: { listCatalogs: () => ({ catalogs: [] }) } },
     });
     expect(await screen.findByText("No catalogs yet.")).toBeInTheDocument();
   });
@@ -138,7 +179,7 @@ describe("CatalogsList", () => {
 
 describe("CatalogDetails", () => {
   it("renders overview, details, and permissions", async () => {
-    renderWithProviders(<CatalogDetails catalog="main" />, { handler });
+    renderWithProviders(<CatalogDetails catalog="main" />, options);
     expect(
       await screen.findByRole("heading", { name: "main" }),
     ).toBeInTheDocument();
@@ -152,7 +193,7 @@ describe("CatalogDetails", () => {
 describe("SchemaDetails", () => {
   it("renders the object browser and tabs", async () => {
     renderWithProviders(<SchemaDetails catalog="main" schema="default" />, {
-      handler,
+      ...options,
     });
     expect(
       await screen.findByRole("heading", { name: "default" }),
@@ -170,7 +211,7 @@ describe("TableDetails", () => {
   it("renders columns and metadata", async () => {
     renderWithProviders(
       <TableDetails catalog="main" schema="default" table="events" />,
-      { handler },
+      options,
     );
     expect(
       await screen.findByRole("heading", { name: "events" }),
@@ -188,7 +229,7 @@ describe("MetricViewDetails", () => {
   it("renders columns, definition, and metadata", async () => {
     renderWithProviders(
       <MetricViewDetails catalog="main" schema="default" view="metrics" />,
-      { handler },
+      options,
     );
     expect(
       await screen.findByRole("heading", { name: "metrics" }),
@@ -202,7 +243,7 @@ describe("VolumeDetails", () => {
   it("renders overview + details", async () => {
     renderWithProviders(
       <VolumeDetails catalog="main" schema="default" volume="vol" />,
-      { handler },
+      options,
     );
     expect(
       await screen.findByRole("heading", { name: "vol" }),
@@ -219,7 +260,7 @@ describe("FunctionDetails", () => {
   it("renders input parameters", async () => {
     renderWithProviders(
       <FunctionDetails catalog="main" schema="default" ucFunction="fn" />,
-      { handler },
+      options,
     );
     expect(
       await screen.findByRole("heading", { name: "fn" }),
@@ -234,7 +275,7 @@ describe("ModelDetails", () => {
   it("lists versions and links to a version", async () => {
     renderWithProviders(
       <ModelDetails catalog="main" schema="default" model="mdl" />,
-      { handler },
+      options,
     );
     expect(
       await screen.findByRole("heading", { name: "mdl" }),
@@ -257,7 +298,7 @@ describe("ModelVersionDetails", () => {
         model="mdl"
         version="1"
       />,
-      { handler },
+      options,
     );
     expect(await screen.findByText("s3://m")).toBeInTheDocument();
   });
@@ -270,7 +311,7 @@ describe("ModelVersionDetails", () => {
         model="mdl"
         version="invalid"
       />,
-      { handler },
+      options,
     );
 
     expect(

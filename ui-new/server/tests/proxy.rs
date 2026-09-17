@@ -17,8 +17,6 @@ fn test_config(uc_server: String) -> Config {
         okta_enabled: false,
         keycloak_enabled: true,
         allowed_origins: vec![],
-        // A path that certainly does not exist, so the SPA fallback stays inert.
-        web_dist: std::path::PathBuf::from("/nonexistent-web-dist"),
     }
 }
 
@@ -93,7 +91,9 @@ async fn call_maps_non_2xx_to_ok_false() {
     assert_eq!(resp.status(), StatusCode::OK);
     let json = body_json(resp).await;
     assert_eq!(json["httpStatus"], 404);
-    assert_eq!(json["ok"], false);
+    // Proto JSON omits fields holding their default value; clients decode the
+    // absent field as false.
+    assert!(json.get("ok").is_none());
 }
 
 #[tokio::test]
@@ -105,7 +105,8 @@ async fn call_forwards_cookie_and_propagates_set_cookie() {
         .and(wiremock::matchers::header("cookie", "UC_SESSION=abc"))
         .respond_with(
             ResponseTemplate::new(200)
-                .insert_header("set-cookie", "UC_SESSION=fresh; HttpOnly; Path=/")
+                .append_header("set-cookie", "UC_SESSION=fresh; HttpOnly; Path=/")
+                .append_header("set-cookie", "UC_CSRF=fresh; Path=/")
                 .set_body_string(r#"{"access_token":"t"}"#),
         )
         .mount(&uc)
@@ -131,8 +132,15 @@ async fn call_forwards_cookie_and_propagates_set_cookie() {
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     // The bridge copied UC's Set-Cookie back onto the (same-origin) response.
-    let set_cookie = resp.headers().get(header::SET_COOKIE).unwrap();
-    assert!(set_cookie.to_str().unwrap().contains("UC_SESSION=fresh"));
+    let set_cookies: Vec<_> = resp
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .map(|value| value.to_str().unwrap())
+        .collect();
+    assert_eq!(set_cookies.len(), 2);
+    assert!(set_cookies[0].contains("UC_SESSION=fresh"));
+    assert!(set_cookies[1].contains("UC_CSRF=fresh"));
 }
 
 #[tokio::test]
@@ -140,22 +148,6 @@ async fn call_requires_path() {
     let app = build_app("http://127.0.0.1:1".to_string());
     let resp = app
         .oneshot(call_request(serde_json::json!({ "method": "GET" })))
-        .await
-        .unwrap();
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    let json = body_json(resp).await;
-    assert_eq!(json["code"], "invalid_argument");
-}
-
-#[tokio::test]
-async fn call_rejects_client_selected_upstream() {
-    let app = build_app("http://127.0.0.1:1".to_string());
-    let resp = app
-        .oneshot(call_request(serde_json::json!({
-            "serverUrl": "http://169.254.169.254",
-            "method": "GET",
-            "path": "/api/1.0/unity-control/scim2/Me"
-        })))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);

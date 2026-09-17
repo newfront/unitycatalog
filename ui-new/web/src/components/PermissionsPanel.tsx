@@ -15,12 +15,7 @@ type PrivilegeAssignment = { principal: string; privileges: string[] };
 type PermissionsResponse = { privilege_assignments?: PrivilegeAssignment[] };
 
 export type SecurableType =
-  | "catalog"
-  | "schema"
-  | "table"
-  | "volume"
-  | "function"
-  | "registered_model";
+  "catalog" | "schema" | "table" | "volume" | "function" | "registered_model";
 
 // PermissionsPanel lists the privilege assignments (principal -> privileges) on
 // a securable via GET /permissions/{type}/{full_name}. It is read-only for this
