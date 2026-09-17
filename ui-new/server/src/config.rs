@@ -13,6 +13,8 @@ pub struct Config {
     pub google_client_id: String,
     pub okta_enabled: bool,
     pub keycloak_enabled: bool,
+    /// Whether the SPA validates RPC requests before sending them to the bridge.
+    pub rpc_validation_enabled: bool,
     /// Extra CORS origins to allow. Empty means same-origin proxying only.
     pub allowed_origins: Vec<String>,
 }
@@ -65,6 +67,7 @@ impl Config {
             google_client_id: env_string("GOOGLE_CLIENT_ID", ""),
             okta_enabled: env_bool("OKTA_AUTH_ENABLED", false)?,
             keycloak_enabled: env_bool("KEYCLOAK_AUTH_ENABLED", false)?,
+            rpc_validation_enabled: env_bool("UI_RPC_VALIDATION_ENABLED", false)?,
             allowed_origins,
         })
     }
