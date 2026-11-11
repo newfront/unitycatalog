@@ -1,11 +1,17 @@
+import { createRegistry } from "@bufbuild/protobuf";
 import type { Validator } from "@bufbuild/protovalidate";
 import { Code, ConnectError, type Interceptor } from "@connectrpc/connect";
+import { file_uc_v1_predefined_string_rules } from "@/gen/uc/v1/predefined_string_rules_pb";
 
 let validator: Promise<Validator> | undefined;
 
 function getValidator(): Promise<Validator> {
   return (validator ??= import("@bufbuild/protovalidate").then(
-    ({ createValidator }) => createValidator(),
+    ({ createValidator }) =>
+      // Predefined rules are proto extensions; the validator needs them registered.
+      createValidator({
+        registry: createRegistry(file_uc_v1_predefined_string_rules),
+      }),
   ));
 }
 
